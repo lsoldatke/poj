@@ -4,7 +4,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
-import java.util.Random;
 
 public class Panel extends JPanel {
     static final int WINDOW_HEIGHT = 600;
@@ -13,17 +12,14 @@ public class Panel extends JPanel {
     static final int MAX_ELEMENTS = (WINDOW_WIDTH * WINDOW_HEIGHT) / (SIZE_OF_ELEMENTS * SIZE_OF_ELEMENTS); // Maksymalna ilosc elementow / jednostek na ekranie
     static final int TIMER_DELAY = 150; // Opoznienie timera, szybkosc gry - im mniejsza wartosc, tym szybsza gra
     String GAME_OVER_MESSAGE = "KONIEC GRY"; // Napis wyswietlany po przegranej
-    int[] x = new int[MAX_ELEMENTS]; // Wspolrzedne x weza w tablicy o rozmiarze rownym maksymalnej ilosci elementow / jednostek na ekranie
-    int[] y = new int[MAX_ELEMENTS]; // Wspolrzedne y weza w tablicy o rozmiarze rownym maksymalnej ilosci elementow / jednostek na ekranie
-    int score, snakeSize;
-    int applePosX, applePosY; // Koordynaty x,y jablka
-    boolean isMoving = false; // Czy waz powinien sie poruszac
-    char currentDirection = 'R';
+    int score;
+    Apple apple = new Apple();
+    Snake snake = new Snake();
     Timer timerClock = new Timer(TIMER_DELAY, new ActionListener() {
         @Override
         public void actionPerformed(ActionEvent e) {
-            if (isMoving) { // Jezeli powinien sie poruszac ...
-                move(); // ... ruszaj
+            if (snake.isMoving) { // Jezeli powinien sie poruszac ...
+                snake.move(); // ... ruszaj
                 isThereCollision(); // ... sprawdz czy nastapila jakas kolizja
                 isAppleEaten(); // ... sprawdz czy zjedzono jablko
                 repaint(); // ... odswiez / przerysuj
@@ -44,16 +40,25 @@ public class Panel extends JPanel {
             @Override
             public void keyPressed(KeyEvent e) { // Jezeli wcisnieto klawisz ...
                 switch (e.getKeyCode()) {
-                    case KeyEvent.VK_UP -> // ... w gore, to zmien aktualny kierunek ruchu weza do gory
-                            currentDirection = 'U';
-                    case KeyEvent.VK_DOWN -> // ... w dol, to na dol
-                            currentDirection = 'D';
-                    case KeyEvent.VK_LEFT -> // ... w lewo, to na lewo
-                            currentDirection = 'L';
-                    case KeyEvent.VK_RIGHT -> // ... w prawo, to na prawo
-                            currentDirection = 'R';
-                    case KeyEvent.VK_R -> // ... a jesli wcisnieto R to zrestartuj gre
+                    case KeyEvent.VK_UP: // ... w gore, to zmien aktualny kierunek ruchu weza do gory
+                            if (snake.currentDirection != Snake.Direction.DOWN) // Zapobiega przerwaniu gry kiedy zmieni sie kierunek na przeciwny
+                                snake.currentDirection = Snake.Direction.UP;
+                            break;
+                    case KeyEvent.VK_DOWN: // ... w dol, to na dol
+                            if (snake.currentDirection != Snake.Direction.UP)
+                                snake.currentDirection = Snake.Direction.DOWN;
+                            break;
+                    case KeyEvent.VK_LEFT: // ... w lewo, to na lewo
+                            if (snake.currentDirection != Snake.Direction.RIGHT)
+                                snake.currentDirection = Snake.Direction.LEFT;
+                            break;
+                    case KeyEvent.VK_RIGHT: // ... w prawo, to na prawo
+                            if (snake.currentDirection != Snake.Direction.LEFT)
+                                snake.currentDirection = Snake.Direction.RIGHT;
+                            break;
+                    case KeyEvent.VK_R: // ... a jesli wcisnieto R to zrestartuj gre
                             newGame();
+                            break;
                 }
             }
 
@@ -67,9 +72,9 @@ public class Panel extends JPanel {
 
     public void newGame() {
         score = 0;
-        snakeSize = 5;
-        isMoving = true;
-        createApple();
+        snake.size = 5;
+        snake.isMoving = true;
+        apple.createNew();
         timerClock.start();
     }
 
@@ -83,12 +88,6 @@ public class Panel extends JPanel {
         g.drawString(GAME_OVER_MESSAGE, (WINDOW_WIDTH - fm.stringWidth(GAME_OVER_MESSAGE)) / 2, WINDOW_HEIGHT / 2); // Wyswietl komunikat na srodku ekranu
     }
 
-    public void createApple() { // Wylosuj x, y gdzie ma sie pojawic jablko (z zakresu szerokosci i wysokosci okna)
-        Random random = new Random();
-        applePosX = random.nextInt(WINDOW_WIDTH / SIZE_OF_ELEMENTS) * SIZE_OF_ELEMENTS;
-        applePosY = random.nextInt(WINDOW_HEIGHT / SIZE_OF_ELEMENTS) * SIZE_OF_ELEMENTS;
-    }
-
     @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -96,17 +95,17 @@ public class Panel extends JPanel {
     }
 
     public void draw(Graphics g) {
-        if (isMoving) { // Jezeli ma sie poruszac to ...
+        if (snake.isMoving) { // Jezeli ma sie poruszac to ...
             g.setColor(Color.black); // Kolor jablka
-            g.fillOval(applePosX, applePosY, SIZE_OF_ELEMENTS, SIZE_OF_ELEMENTS); // Narysuj jablko
+            g.fillOval(apple.posX, apple.posY, SIZE_OF_ELEMENTS, SIZE_OF_ELEMENTS); // Narysuj jablko
 
-            for (int i = 0; i < snakeSize; i++) {
+            for (int i = 0; i < snake.size; i++) {
                 if (i == 0) { // x[0], y[0] - glowa weza
                     g.setColor(Color.black); // Kolor glowy weza
-                    g.fillRect(x[i], y[i], SIZE_OF_ELEMENTS, SIZE_OF_ELEMENTS); // Rysuj glowe weza
+                    g.fillRect(snake.x[i], snake.y[i], SIZE_OF_ELEMENTS, SIZE_OF_ELEMENTS); // Rysuj glowe weza
                 } else {
                     g.setColor(Color.darkGray); // Kolor reszty weza
-                    g.fillRect(x[i], y[i], SIZE_OF_ELEMENTS, SIZE_OF_ELEMENTS); // Rysuje reszte weza
+                    g.fillRect(snake.x[i], snake.y[i], SIZE_OF_ELEMENTS, SIZE_OF_ELEMENTS); // Rysuje reszte weza
                 }
             }
 
@@ -118,47 +117,29 @@ public class Panel extends JPanel {
         }
     }
 
-    public void move() {
-        for (int i = snakeSize; i > 0; i--) { // Zmien polozenie poszczegolnych elementow weza poprzez przypisanie im pozycji x, y poprzedniego elementu
-            x[i] = x[i-1];
-            y[i] = y[i-1];
-        }
-
-        switch (currentDirection) { // Zmiana kierunku ruchu weza poprzez dodanie lub odjecie od koordynatow jego glowy rozmiaru pojedynczego elementu
-            case 'U' -> // Gora
-                    y[0] = y[0] - SIZE_OF_ELEMENTS;
-            case 'D' -> // Dol
-                    y[0] = y[0] + SIZE_OF_ELEMENTS;
-            case 'L' -> // Lewo
-                    x[0] = x[0] - SIZE_OF_ELEMENTS;
-            case 'R' -> // Prawo
-                    x[0] = x[0] + SIZE_OF_ELEMENTS;
-        }
-    }
-
     public void isThereCollision() { // Obsluga kolizji
-        for (int i = snakeSize; i > 0; i--) {
-            if ((x[i] == x[0]) && (y[i] == y[0])) { // Sprawdzenie czy nastapila kolizja glowy z cialem weza ...
-                isMoving = false; // ... jesli tak, ma sie zatrzymac
+        for (int i = snake.size; i > 0; i--) {
+            if ((snake.x[i] == snake.x[0]) && (snake.y[i] == snake.y[0])) { // Sprawdzenie czy nastapila kolizja glowy z cialem weza ...
+                snake.isMoving = false; // ... jesli tak, ma sie zatrzymac
                 break;
             }
         }
 
-        if (x[0] < 0) // Sprawdzenie kolizji z lewa krawedzia
-            isMoving = false;
-        if (x[0] > WINDOW_WIDTH) // ... z prawa
-            isMoving = false;
-        if (y[0] < 0) // ... z gorna
-            isMoving = false;
-        if (y[0] > WINDOW_HEIGHT) // ... i z dolna krawedzia
-            isMoving = false;
+        if (snake.x[0] < 0) // Sprawdzenie kolizji z lewa krawedzia
+            snake.isMoving = false;
+        if (snake.x[0] > WINDOW_WIDTH) // ... z prawa
+            snake.isMoving = false;
+        if (snake.y[0] < 0) // ... z gorna
+            snake.isMoving = false;
+        if (snake.y[0] > WINDOW_HEIGHT) // ... i z dolna krawedzia
+            snake.isMoving = false;
     }
 
     public void isAppleEaten() { // Obsluga zjedzenia jablka
-        if ((applePosX == x[0]) && (applePosY == y[0])) { // Jesli glowa weza i jablko znajda sie w tym samym miejscu ...
+        if ((apple.posX == snake.x[0]) && (apple.posY == snake.y[0])) { // Jesli glowa weza i jablko znajda sie w tym samym miejscu ...
             score++; // ... zwieksz wynik
-            snakeSize++; // ... powieksz weza
-            createApple(); // ... i stworz nowe jablko
+            snake.size++; // ... powieksz weza
+            apple.createNew(); // ... i stworz nowe jablko
         }
     }
 }
